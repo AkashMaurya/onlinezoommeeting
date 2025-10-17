@@ -1,16 +1,33 @@
-# Video Meeting Platform
+# 🎥 Online Church Meeting Platform
 
-An open-source video meeting platform built with WebRTC, FastAPI, and modern web technologies. Supports up to 100 concurrent users with features like audio recording, screen sharing, and easy meeting creation.
+An open-source video meeting platform built with WebRTC, FastAPI, and modern web technologies. Designed for church prayer meetings with professional Google Meet/Zoom-inspired UI.
 
-## Features
+## 🚀 RENDER DEPLOYMENT - START COMMAND
+
+**⚠️ IMPORTANT**: When deploying to Render, use this **Start Command**:
+```
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+**Build Command**:
+```
+pip install -r requirements.txt
+```
+
+## ✨ Features
 
 - 🎥 **Video Conferencing**: Real-time video and audio communication using WebRTC
+- 💬 **Live Chat**: Real-time chat with timestamps and unread indicators
+- 😊 **Emoji Reactions**: Floating emoji reactions (👍 ❤️ 😂 👏 🎉 🔥)
 - 🎤 **Audio Recording**: Client-side audio recording with local WAV file saving
 - 👥 **Multi-User Support**: Up to 100 concurrent participants
+- 🔇 **Participant Indicators**: See who's muted or has video off
+- ⏱️ **Meeting Timer**: Live meeting duration counter
+- 📱 **Grid/Speaker View**: Toggle between layout modes
 - 🔗 **Easy Sharing**: Simple meeting links for quick joining
-- 🎨 **Modern UI**: Clean, responsive interface
-- 🚀 **No Authentication**: Quick and easy access (can be enhanced for production)
-- 📱 **Mobile Friendly**: Responsive design works on all devices
+- 🎨 **Professional UI**: Google Meet/Zoom-inspired dark theme
+- 🚀 **No Authentication**: Quick and easy access
+- 📱 **Mobile Responsive**: Works on phones, tablets, and desktops
 
 ## Technology Stack
 
