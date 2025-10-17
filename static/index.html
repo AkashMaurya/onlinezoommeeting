@@ -248,6 +248,84 @@
         .host-control-btn:hover {
             transform: scale(1.05);
         }
+
+        /* Mute/Unmute Icon Overlay on Videos */
+        .mute-indicator {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            padding: 6px 10px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.875rem;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+
+        .mute-indicator.muted {
+            background: rgba(239, 68, 68, 0.8);
+        }
+
+        .mute-indicator.unmuted {
+            background: rgba(16, 185, 129, 0.7);
+        }
+
+        .mute-indicator i {
+            font-size: 0.875rem;
+        }
+
+        /* Theme toggle button */
+        .theme-toggle {
+            transition: transform 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            transform: rotate(180deg);
+        }
+
+        /* Light mode styles */
+        body.light-mode {
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        body.light-mode .bg-gray-900 {
+            background: #f3f4f6 !important;
+        }
+
+        body.light-mode .bg-gray-800 {
+            background: #ffffff !important;
+            border-color: #e5e7eb !important;
+        }
+
+        body.light-mode .bg-gray-700 {
+            background: #e5e7eb !important;
+            color: #111827 !important;
+        }
+
+        body.light-mode .text-white {
+            color: #111827 !important;
+        }
+
+        body.light-mode .text-gray-400 {
+            color: #6b7280 !important;
+        }
+
+        body.light-mode .border-gray-700 {
+            border-color: #e5e7eb !important;
+        }
+
+        body.light-mode .video-container {
+            background: #e5e7eb;
+        }
+
+        body.light-mode .control-bar {
+            background: linear-gradient(to top, rgba(255, 255, 255, 0.95), rgba(243, 244, 246, 0.95));
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white overflow-hidden">
@@ -313,7 +391,7 @@
                 </div>
             </div>
             
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2 md:space-x-4">
                 <div class="hidden md:flex items-center space-x-2 bg-gray-700 rounded-lg p-1">
                     <button id="gridViewBtn" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors text-sm">
                         <i class="fas fa-th"></i> Grid
@@ -322,6 +400,15 @@
                         <i class="fas fa-user"></i> Speaker
                     </button>
                 </div>
+
+                <button id="copyLinkBtn" class="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors control-btn" title="Copy Meeting Link">
+                    <i class="fas fa-link"></i>
+                    <span class="hidden lg:inline text-sm">Share Link</span>
+                </button>
+
+                <button id="themeToggleBtn" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors control-btn theme-toggle" title="Toggle Dark/Light Mode">
+                    <i class="fas fa-moon"></i>
+                </button>
 
                 <button id="participantListBtn" class="flex items-center space-x-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors control-btn">
                     <i class="fas fa-users"></i>

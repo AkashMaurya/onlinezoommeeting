@@ -78,6 +78,8 @@ const toastContainer = document.getElementById('toastContainer');
 const shareScreenBtn = document.getElementById('shareScreenBtn');
 const gridViewBtn = document.getElementById('gridViewBtn');
 const speakerViewBtn = document.getElementById('speakerViewBtn');
+const copyLinkBtn = document.getElementById('copyLinkBtn');
+const themeToggleBtn = document.getElementById('themeToggleBtn');
 
 // ===== EVENT LISTENERS =====
 createMeetingBtn.addEventListener('click', createMeeting);
@@ -104,6 +106,8 @@ recordBtn.addEventListener('click', toggleRecording);
 shareScreenBtn.addEventListener('click', toggleScreenShare);
 gridViewBtn.addEventListener('click', () => switchView('grid'));
 speakerViewBtn.addEventListener('click', () => switchView('speaker'));
+copyLinkBtn.addEventListener('click', copyMeetingLink);
+themeToggleBtn.addEventListener('click', toggleTheme);
 
 // Reaction emoji buttons
 document.querySelectorAll('.reaction-emoji').forEach(btn => {
@@ -418,6 +422,13 @@ function addVideoStream(id, stream, label, isLocal) {
     videoContainer.appendChild(video);
     videoContainer.appendChild(videoInfo);
 
+    // Add mute/unmute indicator overlay
+    const muteIndicator = document.createElement('div');
+    muteIndicator.className = 'mute-indicator unmuted';
+    muteIndicator.id = `mute-indicator-${id}`;
+    muteIndicator.innerHTML = '<i class="fas fa-microphone"></i>';
+    videoContainer.appendChild(muteIndicator);
+
     // Add host controls if current user is host and this is not local video
     if (isHost && !isLocal) {
         const hostControls = document.createElement('div');
@@ -492,6 +503,9 @@ function toggleAudio() {
         toggleAudioBtn.querySelector('i').className = 'fas fa-microphone-slash text-lg';
     }
 
+    // Update local mute indicator
+    updateMuteIndicator('local', isAudioEnabled);
+
     broadcastParticipantState();
 }
 
@@ -511,6 +525,9 @@ function updateParticipantState(message) {
         video: message.video_enabled,
         audio: message.audio_enabled
     };
+
+    // Update mute indicator overlay
+    updateMuteIndicator(peerId, message.audio_enabled);
 
     const indicators = document.getElementById(`indicators-${peerId}`);
     if (indicators) {
@@ -1379,6 +1396,83 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-console.log('Online Church Meeting Platform loaded - Enhanced version with bug fixes and new features');
+// ===== NEW FEATURES - v3.1 =====
+
+// Update mute indicator overlay on video
+function updateMuteIndicator(participantId, isAudioEnabled) {
+    const muteIndicator = document.getElementById(`mute-indicator-${participantId}`);
+    if (muteIndicator) {
+        if (isAudioEnabled) {
+            muteIndicator.className = 'mute-indicator unmuted';
+            muteIndicator.innerHTML = '<i class="fas fa-microphone"></i>';
+        } else {
+            muteIndicator.className = 'mute-indicator muted';
+            muteIndicator.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+        }
+    }
+}
+
+// Copy meeting link to clipboard
+function copyMeetingLink() {
+    if (!meetingId) {
+        showToast('No active meeting', 'error');
+        return;
+    }
+
+    const link = `${window.location.origin}?meeting=${meetingId}`;
+
+    navigator.clipboard.writeText(link).then(() => {
+        showToast('Meeting link copied to clipboard!', 'success');
+    }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = link;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showToast('Meeting link copied to clipboard!', 'success');
+        } catch (err) {
+            showToast('Failed to copy link', 'error');
+        }
+        document.body.removeChild(textArea);
+    });
+}
+
+// Toggle between dark and light mode
+function toggleTheme() {
+    const body = document.body;
+    const icon = themeToggleBtn.querySelector('i');
+
+    if (body.classList.contains('light-mode')) {
+        // Switch to dark mode
+        body.classList.remove('light-mode');
+        icon.className = 'fas fa-moon';
+        localStorage.setItem('theme', 'dark');
+        showToast('Dark mode enabled', 'info');
+    } else {
+        // Switch to light mode
+        body.classList.add('light-mode');
+        icon.className = 'fas fa-sun';
+        localStorage.setItem('theme', 'light');
+        showToast('Light mode enabled', 'info');
+    }
+}
+
+// Load saved theme on page load
+window.addEventListener('load', () => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light') {
+        document.body.classList.add('light-mode');
+        const icon = themeToggleBtn.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-sun';
+        }
+    }
+});
+
+console.log('Online Church Meeting Platform loaded - v3.1 with mute indicators, shareable links, and theme toggle');
 console.log('Features: Host controls, Notifications, Mobile optimization, Low data mode, MP3 recording');
 
