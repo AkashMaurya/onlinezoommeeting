@@ -1,9 +1,10 @@
-# 🎥 Online Church Meeting Platform v3.0.0
+# 🎥 Online Church Meeting Platform v3.1.0
 
 An open-source video meeting platform built with WebRTC, FastAPI, and modern web technologies. Designed for church prayer meetings with professional Google Meet/Zoom-inspired UI.
 
-**Latest Version:** 3.0.0 (2025-10-17)
-**Major Update:** Screen sharing, MP3 recording, enhanced host controls, grid/speaker view toggle
+**Latest Version:** 3.1.0 (2025-10-17)
+**Latest Update:** Mute indicators, shareable links, theme toggle
+**Previous Update:** Screen sharing, MP3 recording, enhanced host controls, grid/speaker view toggle
 
 ## 🚀 RENDER DEPLOYMENT - START COMMAND
 
@@ -19,7 +20,13 @@ pip install -r requirements.txt
 
 ## ✨ Features
 
-### 🆕 NEW in v3.0.0 (Latest)
+### 🆕 NEW in v3.1.0 (Latest)
+
+- 🎤 **Mute/Unmute Icon Overlay**: Visual microphone indicators on each video showing real-time mute status
+- 🔗 **Shareable Meeting Link**: One-click copy meeting link to clipboard for easy invitations
+- 🌓 **Dark/Light Mode Toggle**: Switch between dark and light themes with saved preference
+
+### NEW in v3.0.0
 
 - 🖥️ **Screen Sharing with Audio**: Share your screen with system audio for presentations and videos
 - 🎵 **MP3 Audio Recording**: Record meeting audio in MP3 format (captures all participants)
@@ -285,6 +292,7 @@ For issues and questions:
 
 ## 📚 Documentation
 
+- **[V3.1_FEATURES.md](V3.1_FEATURES.md)** - Complete guide to v3.1.0 features (NEW!)
 - **[V3_FEATURES.md](V3_FEATURES.md)** - Complete guide to v3.0.0 features
 - **[TESTING_CHECKLIST_V3.md](TESTING_CHECKLIST_V3.md)** - Comprehensive testing guide
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and changes
@@ -292,6 +300,23 @@ For issues and questions:
 - **[QUICK_START.md](QUICK_START.md)** - 5-minute setup guide
 
 ## 🎯 Quick Feature Guide
+
+### Mute Indicators (NEW in v3.1)
+- Green microphone icon = unmuted
+- Red microphone-slash icon = muted
+- Appears on bottom-left of each video
+- Updates in real-time
+
+### Shareable Link (NEW in v3.1)
+1. Click "Share Link" button in top bar
+2. Link copied to clipboard
+3. Share with participants
+4. They click link and join directly
+
+### Theme Toggle (NEW in v3.1)
+1. Click moon/sun icon in top bar
+2. Switches between dark and light mode
+3. Preference saved automatically
 
 ### Screen Sharing
 1. Click "Share" button in control bar
@@ -341,5 +366,5 @@ For issues and questions:
 **All Glory to Our LORD JESUS CHRIST (The Son of GOD)**
 **Made by Jesus Sheep Akash**
 
-**Version:** 3.0.0 | **License:** MIT | **Repository:** [GitHub](https://github.com/AkashMaurya/onlinezoommeeting)
+**Version:** 3.1.0 | **License:** MIT | **Repository:** [GitHub](https://github.com/AkashMaurya/onlinezoommeeting)
 
