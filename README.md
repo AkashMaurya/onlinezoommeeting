@@ -1,6 +1,9 @@
-# 🎥 Online Church Meeting Platform
+# 🎥 Online Church Meeting Platform v3.0.0
 
 An open-source video meeting platform built with WebRTC, FastAPI, and modern web technologies. Designed for church prayer meetings with professional Google Meet/Zoom-inspired UI.
+
+**Latest Version:** 3.0.0 (2025-10-17)
+**Major Update:** Screen sharing, MP3 recording, enhanced host controls, grid/speaker view toggle
 
 ## 🚀 RENDER DEPLOYMENT - START COMMAND
 
@@ -16,16 +19,24 @@ pip install -r requirements.txt
 
 ## ✨ Features
 
+### 🆕 NEW in v3.0.0 (Latest)
+
+- 🖥️ **Screen Sharing with Audio**: Share your screen with system audio for presentations and videos
+- 🎵 **MP3 Audio Recording**: Record meeting audio in MP3 format (captures all participants)
+- 👑 **Enhanced Host Controls**: Mute AND kick participants from the meeting
+- 📊 **Grid/Speaker View Toggle**: Switch between grid view and speaker view with active speaker detection
+- 🎨 **Modern UI Enhancements**: Gradient backgrounds, smooth animations, and professional design
+- 🔧 **Video Mirror Fix**: Videos display in normal orientation (not mirrored)
+
 ### Core Features
 - 🎥 **Video Conferencing**: Real-time video and audio communication using WebRTC
 - 💬 **Live Chat**: Real-time chat with timestamps and unread indicators
-- 😊 **Emoji Reactions**: Floating emoji reactions (👍 ❤️ 😂 👏 🎉 🙏) - **FIXED: Now works unlimited times!**
-- 🎤 **Audio Recording**: Client-side recording in WebM format (smaller file sizes)
+- 😊 **Emoji Reactions**: Floating emoji reactions (👍 ❤️ 😂 👏 🎉 🙏)
 - 👥 **Multi-User Support**: Up to 100 concurrent participants
 - 🔗 **Easy Sharing**: Simple meeting links for quick joining
 - 🚀 **No Authentication**: Quick and easy access
 
-### NEW in v2.0 🎉
+### v2.0 Features
 - 👑 **Host Controls**: Meeting creator can remotely mute/stop video for any participant
 - 🔔 **Join/Leave Notifications**: Toast notifications when participants join or leave
 - 📋 **Participant List**: Always-visible list with names, avatars, and status indicators
@@ -34,11 +45,6 @@ pip install -r requirements.txt
 - 📊 **Low Data Mode**: Reduce bandwidth usage by 70% for slow connections
 - ⏱️ **Meeting Timer**: Live meeting duration counter
 - 🔇 **Participant Indicators**: See who's muted or has video off in real-time
-
-### Bug Fixes in v2.0 ✅
-- ✅ **FIXED**: Host can now see all participant videos (was broken in v1.0)
-- ✅ **FIXED**: All participants can now speak - microphones work properly
-- ✅ **FIXED**: Emoji reactions now work unlimited times (was only once before)
 
 ## Technology Stack
 
@@ -277,14 +283,63 @@ For issues and questions:
 - Check the browser console for error messages
 - Ensure all dependencies are installed correctly
 
+## 📚 Documentation
+
+- **[V3_FEATURES.md](V3_FEATURES.md)** - Complete guide to v3.0.0 features
+- **[TESTING_CHECKLIST_V3.md](TESTING_CHECKLIST_V3.md)** - Comprehensive testing guide
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and changes
+- **[DEPLOYMENT_SUMMARY.md](DEPLOYMENT_SUMMARY.md)** - Deployment instructions
+- **[QUICK_START.md](QUICK_START.md)** - 5-minute setup guide
+
+## 🎯 Quick Feature Guide
+
+### Screen Sharing
+1. Click "Share" button in control bar
+2. Select screen/window to share
+3. Check "Share audio" for system sound
+4. Click "Share" - red indicator appears
+5. Click again to stop
+
+### MP3 Recording
+1. Click "Audio Record" button
+2. Button turns red and pulses
+3. Click again to stop
+4. File downloads as `.mp3`
+
+### Host Controls
+1. Host sees mute/kick buttons on participant videos
+2. Click to mute participant remotely
+3. Open participant list for kick option
+4. Confirmation required to kick
+
+### Grid/Speaker View
+1. Click "Grid" or "Speaker" in top bar
+2. Grid: All equal-sized videos
+3. Speaker: Large active speaker + thumbnails
+4. Green border shows who's talking
+
+## 🌟 What Makes This Special
+
+- ✅ **100% Open Source** - No vendor lock-in
+- ✅ **Privacy First** - No data collection, client-side recording
+- ✅ **Easy Deployment** - One-click deploy to Render.com
+- ✅ **No Limits** - Unlimited meeting duration
+- ✅ **Professional UI** - Looks like Zoom/Google Meet
+- ✅ **Church Focused** - Built for prayer meetings
+
 ## Acknowledgments
 
 - WebRTC for real-time communication
 - FastAPI for the excellent Python framework
 - SimplePeer for WebRTC abstraction
 - RecordRTC for recording capabilities
+- Tailwind CSS for modern UI
 
 ---
 
-Built with ❤️ using open-source technologies
+**Built with ❤️ for Church Prayer Meetings**
+**All Glory to Our LORD JESUS CHRIST (The Son of GOD)**
+**Made by Jesus Sheep Akash**
+
+**Version:** 3.0.0 | **License:** MIT | **Repository:** [GitHub](https://github.com/AkashMaurya/onlinezoommeeting)
 
