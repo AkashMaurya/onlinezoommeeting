@@ -6,12 +6,13 @@ import json
 from typing import Dict, Set
 import logging
 from database import Database
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Video Meeting Platform")
+app = FastAPI(title="Online Church Meeting Platform")
 
 # Initialize database
 db = Database()
@@ -19,6 +20,14 @@ db = Database()
 # Store active WebSocket connections
 # Structure: {meeting_id: {participant_id: websocket}}
 active_connections: Dict[str, Dict[str, WebSocket]] = {}
+
+# Store meeting hosts (creator of each meeting)
+# Structure: {meeting_id: host_participant_id}
+meeting_hosts: Dict[str, str] = {}
+
+# Store participant usernames
+# Structure: {meeting_id: {participant_id: username}}
+participant_usernames: Dict[str, Dict[str, str]] = {}
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -63,38 +72,43 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str, participant_
     """WebSocket endpoint for WebRTC signaling"""
     await websocket.accept()
     logger.info(f"Participant {participant_id} connecting to meeting {meeting_id}")
-    
+
+    username = "Anonymous"
+    is_host = False
+
     # Create meeting if it doesn't exist
     if not db.meeting_exists(meeting_id):
         db.create_meeting(meeting_id)
-    
+
     # Add participant to database
     db.add_participant(meeting_id, participant_id)
-    
+
     # Store WebSocket connection
     if meeting_id not in active_connections:
         active_connections[meeting_id] = {}
+        participant_usernames[meeting_id] = {}
+        # First participant is the host
+        meeting_hosts[meeting_id] = participant_id
+        is_host = True
+        logger.info(f"Participant {participant_id} is the host of meeting {meeting_id}")
+
     active_connections[meeting_id][participant_id] = websocket
-    
-    # Notify existing participants about new participant
-    await broadcast_to_meeting(
-        meeting_id,
-        {
-            "type": "participant_joined",
-            "participant_id": participant_id,
-            "participant_count": db.get_participant_count(meeting_id)
-        },
-        exclude_participant=participant_id
-    )
-    
+
     # Send list of existing participants to the new participant
-    existing_participants = [
-        pid for pid in active_connections[meeting_id].keys() 
-        if pid != participant_id
-    ]
+    existing_participants = []
+    for pid in active_connections[meeting_id].keys():
+        if pid != participant_id:
+            existing_participants.append({
+                "id": pid,
+                "username": participant_usernames[meeting_id].get(pid, "Anonymous"),
+                "is_host": pid == meeting_hosts.get(meeting_id)
+            })
+
     await websocket.send_json({
         "type": "existing_participants",
-        "participants": existing_participants
+        "participants": existing_participants,
+        "is_host": is_host,
+        "host_id": meeting_hosts.get(meeting_id)
     })
     
     try:
@@ -104,14 +118,34 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str, participant_
             message = json.loads(data)
             message_type = message.get("type")
 
+            # Handle username registration
+            if message_type == "register_username":
+                username = message.get("username", "Anonymous")
+                participant_usernames[meeting_id][participant_id] = username
+
+                # Notify all participants about the new participant with username
+                await broadcast_to_meeting(
+                    meeting_id,
+                    {
+                        "type": "participant_joined",
+                        "participant_id": participant_id,
+                        "username": username,
+                        "is_host": participant_id == meeting_hosts.get(meeting_id),
+                        "participant_count": db.get_participant_count(meeting_id),
+                        "timestamp": datetime.now().isoformat()
+                    },
+                    exclude_participant=participant_id
+                )
+                logger.info(f"Registered username '{username}' for {participant_id}")
+
             # Handle chat messages
-            if message_type == "chat":
+            elif message_type == "chat":
                 await broadcast_to_meeting(
                     meeting_id,
                     {
                         "type": "chat",
                         "from": participant_id,
-                        "username": message.get("username", "Anonymous"),
+                        "username": participant_usernames[meeting_id].get(participant_id, "Anonymous"),
                         "message": message.get("message", ""),
                         "timestamp": message.get("timestamp")
                     }
@@ -125,7 +159,7 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str, participant_
                     {
                         "type": "reaction",
                         "from": participant_id,
-                        "username": message.get("username", "Anonymous"),
+                        "username": participant_usernames[meeting_id].get(participant_id, "Anonymous"),
                         "emoji": message.get("emoji", "👍")
                     }
                 )
@@ -138,12 +172,31 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str, participant_
                     {
                         "type": "participant_state",
                         "from": participant_id,
-                        "username": message.get("username", "Anonymous"),
+                        "username": participant_usernames[meeting_id].get(participant_id, "Anonymous"),
                         "video_enabled": message.get("video_enabled", True),
                         "audio_enabled": message.get("audio_enabled", True)
                     },
                     exclude_participant=participant_id
                 )
+
+            # Handle host control commands
+            elif message_type == "host_control":
+                # Verify sender is the host
+                if participant_id == meeting_hosts.get(meeting_id):
+                    target_id = message.get("target_id")
+                    action = message.get("action")
+
+                    if target_id and target_id in active_connections[meeting_id]:
+                        target_ws = active_connections[meeting_id][target_id]
+                        await target_ws.send_json({
+                            "type": "host_control",
+                            "action": action,
+                            "value": message.get("value"),
+                            "from_host": True
+                        })
+                        logger.info(f"Host {participant_id} sent control '{action}' to {target_id}")
+                else:
+                    logger.warning(f"Non-host {participant_id} attempted host control")
 
             # Forward WebRTC signaling messages to target participant
             elif "target" in message:
@@ -151,6 +204,7 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str, participant_
                 if meeting_id in active_connections and target_id in active_connections[meeting_id]:
                     target_ws = active_connections[meeting_id][target_id]
                     message["from"] = participant_id
+                    message["from_username"] = participant_usernames[meeting_id].get(participant_id, "Anonymous")
                     await target_ws.send_json(message)
                     logger.debug(f"Forwarded {message_type} from {participant_id} to {target_id}")
 
@@ -167,24 +221,35 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str, participant_
     except Exception as e:
         logger.error(f"Error in WebSocket connection: {e}")
     finally:
+        # Get username before cleanup
+        left_username = participant_usernames.get(meeting_id, {}).get(participant_id, "Anonymous")
+
         # Clean up on disconnect
         if meeting_id in active_connections:
             active_connections[meeting_id].pop(participant_id, None)
-            
+
             # Remove meeting from active connections if empty
             if not active_connections[meeting_id]:
                 active_connections.pop(meeting_id, None)
-        
+                participant_usernames.pop(meeting_id, None)
+                meeting_hosts.pop(meeting_id, None)
+            else:
+                # Remove username
+                if meeting_id in participant_usernames:
+                    participant_usernames[meeting_id].pop(participant_id, None)
+
         # Remove participant from database
         db.remove_participant(meeting_id, participant_id)
-        
-        # Notify remaining participants
+
+        # Notify remaining participants with username
         await broadcast_to_meeting(
             meeting_id,
             {
                 "type": "participant_left",
                 "participant_id": participant_id,
-                "participant_count": db.get_participant_count(meeting_id)
+                "username": left_username,
+                "participant_count": db.get_participant_count(meeting_id),
+                "timestamp": datetime.now().isoformat()
             }
         )
 

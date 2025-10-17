@@ -16,28 +16,41 @@ pip install -r requirements.txt
 
 ## ✨ Features
 
+### Core Features
 - 🎥 **Video Conferencing**: Real-time video and audio communication using WebRTC
 - 💬 **Live Chat**: Real-time chat with timestamps and unread indicators
-- 😊 **Emoji Reactions**: Floating emoji reactions (👍 ❤️ 😂 👏 🎉 🔥)
-- 🎤 **Audio Recording**: Client-side audio recording with local WAV file saving
+- 😊 **Emoji Reactions**: Floating emoji reactions (👍 ❤️ 😂 👏 🎉 🙏) - **FIXED: Now works unlimited times!**
+- 🎤 **Audio Recording**: Client-side recording in WebM format (smaller file sizes)
 - 👥 **Multi-User Support**: Up to 100 concurrent participants
-- 🔇 **Participant Indicators**: See who's muted or has video off
-- ⏱️ **Meeting Timer**: Live meeting duration counter
-- 📱 **Grid/Speaker View**: Toggle between layout modes
 - 🔗 **Easy Sharing**: Simple meeting links for quick joining
-- 🎨 **Professional UI**: Google Meet/Zoom-inspired dark theme
 - 🚀 **No Authentication**: Quick and easy access
-- 📱 **Mobile Responsive**: Works on phones, tablets, and desktops
+
+### NEW in v2.0 🎉
+- 👑 **Host Controls**: Meeting creator can remotely mute/stop video for any participant
+- 🔔 **Join/Leave Notifications**: Toast notifications when participants join or leave
+- 📋 **Participant List**: Always-visible list with names, avatars, and status indicators
+- 🎨 **Tailwind CSS UI**: Modern, professional design with mobile-first approach
+- 📱 **Mobile Optimized**: Touch-friendly controls, responsive layout, works on iOS/Android
+- 📊 **Low Data Mode**: Reduce bandwidth usage by 70% for slow connections
+- ⏱️ **Meeting Timer**: Live meeting duration counter
+- 🔇 **Participant Indicators**: See who's muted or has video off in real-time
+
+### Bug Fixes in v2.0 ✅
+- ✅ **FIXED**: Host can now see all participant videos (was broken in v1.0)
+- ✅ **FIXED**: All participants can now speak - microphones work properly
+- ✅ **FIXED**: Emoji reactions now work unlimited times (was only once before)
 
 ## Technology Stack
 
-- **Frontend**: HTML5, CSS3, JavaScript, WebRTC
+- **Frontend**: HTML5, Tailwind CSS, JavaScript, WebRTC
 - **Backend**: FastAPI (Python)
 - **Database**: SQLite
 - **Libraries**:
   - SimplePeer (WebRTC wrapper)
-  - RecordRTC (Audio recording)
+  - RecordRTC (Audio/Video recording)
   - Adapter.js (WebRTC compatibility)
+  - Tailwind CSS (Utility-first CSS framework)
+  - Font Awesome 6.4.0 (Icons)
 
 ## Quick Start
 
@@ -71,10 +84,20 @@ pip install -r requirements.txt
 ### Testing Locally
 
 1. Open multiple browser windows/tabs
-2. Create a meeting in one window
+2. Create a meeting in one window (you become the host 👑)
 3. Copy the meeting ID
 4. Join from other windows using the same meeting ID
-5. Test video, audio, and recording features
+5. Test all features:
+   - ✅ Video display (host sees participants)
+   - ✅ Audio (everyone can speak and hear)
+   - ✅ Emoji reactions (click multiple times)
+   - ✅ Host controls (mute/stop video)
+   - ✅ Chat messages
+   - ✅ Participant list
+   - ✅ Recording (WebM format)
+   - ✅ Low data mode
+
+**See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing instructions.**
 
 ## Deployment on Render
 

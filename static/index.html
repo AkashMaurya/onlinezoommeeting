@@ -2,216 +2,337 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Online Church Meeting</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
-    <script src="https://unpkg.com/simple-peer@9.11.0/simplepeer.min.js"></script>
-    <script src="https://unpkg.com/recordrtc@5.6.2/RecordRTC.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Online Church Meeting - Prayer Meeting Platform</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- WebRTC Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/recordrtc@5.6.2/RecordRTC.min.js"></script>
+    
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Custom Tailwind Configuration */
+        @tailwind base;
+        @tailwind components;
+        @tailwind utilities;
+        
+        /* Custom Styles */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 0.5rem;
+        }
+        
+        .video-container {
+            position: relative;
+            background: #1f2937;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+        }
+        
+        .video-container.local-user {
+            border: 2px solid #3b82f6;
+        }
+        
+        .video-container.host-user {
+            border: 2px solid #f59e0b;
+        }
+        
+        @keyframes float-up {
+            0% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-200px) scale(1.5);
+                opacity: 0;
+            }
+        }
+        
+        .floating-reaction {
+            animation: float-up 3s ease-out forwards;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .video-grid {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .video-grid.grid-view {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+        
+        /* Touch-friendly buttons */
+        .control-btn {
+            min-width: 48px;
+            min-height: 48px;
+            touch-action: manipulation;
+        }
+        
+        /* Low data mode indicator */
+        .low-data-active {
+            filter: grayscale(0.3);
+        }
+        
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Toast notifications */
+        .toast {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Participant list scrollbar */
+        .participant-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .participant-list::-webkit-scrollbar-track {
+            background: #374151;
+        }
+        
+        .participant-list::-webkit-scrollbar-thumb {
+            background: #6b7280;
+            border-radius: 3px;
+        }
+        
+        /* Chat scrollbar */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-track {
+            background: #374151;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #6b7280;
+            border-radius: 3px;
+        }
+    </style>
 </head>
-<body>
-    <!-- Join/Create Meeting Section -->
-    <div id="joinSection" class="join-container">
-        <div class="join-card">
-            <div class="join-header">
-                <h1>🎥 Online Church Meeting</h1>
-                <p class="subtitle">Only for Prayer Meeting</p>
+<body class="bg-gray-900 text-white overflow-hidden">
+    
+    <!-- Join Section -->
+    <div id="joinSection" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900">
+        <div class="w-full max-w-md bg-gray-800 rounded-2xl shadow-2xl p-8">
+            <div class="text-center mb-8">
+                <i class="fas fa-church text-6xl text-blue-400 mb-4"></i>
+                <h1 class="text-3xl font-bold mb-2">Online Church Meeting</h1>
+                <p class="text-gray-400">Only for Prayer Meeting</p>
             </div>
-            <div class="join-form">
-                <div class="input-group">
-                    <label for="usernameInput">Your Name</label>
-                    <input
-                        type="text"
-                        id="usernameInput"
-                        placeholder="Enter your name"
-                        maxlength="50"
-                        required
-                    >
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Your Name</label>
+                    <input type="text" id="usernameInput" 
+                           class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-white"
+                           placeholder="Enter your name" value="Anonymous">
                 </div>
-                <div class="input-group">
-                    <label for="meetingIdInput">Meeting ID (optional)</label>
-                    <input
-                        type="text"
-                        id="meetingIdInput"
-                        placeholder="Leave blank to create new meeting"
-                        maxlength="8"
-                    >
+                
+                <div>
+                    <label class="block text-sm font-medium mb-2">Meeting ID (optional)</label>
+                    <input type="text" id="meetingIdInput" 
+                           class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-white"
+                           placeholder="Enter meeting ID to join">
                 </div>
-                <div class="button-group">
-                    <button id="createMeetingBtn" class="btn btn-primary">
-                        <span class="btn-icon">➕</span>
-                        Create New Meeting
-                    </button>
-                    <button id="joinMeetingBtn" class="btn btn-success">
-                        <span class="btn-icon">🚪</span>
-                        Join Meeting
-                    </button>
-                </div>
+                
+                <button id="createMeetingBtn" 
+                        class="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors control-btn">
+                    <i class="fas fa-plus-circle mr-2"></i>Create New Meeting
+                </button>
+                
+                <button id="joinMeetingBtn" 
+                        class="w-full py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors control-btn">
+                    <i class="fas fa-sign-in-alt mr-2"></i>Join Meeting
+                </button>
+            </div>
+            
+            <div class="mt-6 text-center text-sm text-gray-400">
+                <p>✨ Features: Video, Audio, Chat, Reactions</p>
+                <p class="mt-1">📱 Works on mobile devices</p>
             </div>
         </div>
     </div>
-
-    <!-- Meeting Room Section -->
-    <div id="meetingSection" class="meeting-container hidden">
+    
+    <!-- Meeting Section -->
+    <div id="meetingSection" class="hidden h-screen flex flex-col bg-gray-900">
+        
         <!-- Top Navigation Bar -->
-        <div class="top-nav">
-            <div class="nav-left">
-                <div class="meeting-title">
-                    <span class="meeting-icon">🎥</span>
-                    <span id="navMeetingTitle">Online Church Meeting</span>
-                </div>
-                <div class="meeting-id-display">
-                    <span class="id-label">ID:</span>
-                    <span id="navMeetingId"></span>
+        <div class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <i class="fas fa-church text-blue-400 text-xl"></i>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-semibold" id="navMeetingId">Meeting</span>
+                        <span id="hostBadge" class="hidden px-2 py-0.5 bg-amber-500 text-xs rounded-full">Host</span>
+                    </div>
+                    <div class="text-xs text-gray-400" id="meetingTimer">00:00:00</div>
                 </div>
             </div>
-            <div class="nav-center">
-                <div class="meeting-timer" id="meetingTimer">00:00:00</div>
-                <div class="meeting-date" id="meetingDate"></div>
-            </div>
-            <div class="nav-right">
-                <div class="participant-indicator">
-                    <span class="participant-icon">👥</span>
-                    <span id="navParticipantCount">1</span>
-                </div>
+            
+            <div class="flex items-center space-x-4">
+                <button id="participantListBtn" class="flex items-center space-x-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors control-btn">
+                    <i class="fas fa-users"></i>
+                    <span id="navParticipantCount" class="font-semibold">1</span>
+                </button>
+                
+                <button id="lowDataModeBtn" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors control-btn hidden md:block">
+                    <i class="fas fa-signal"></i>
+                </button>
             </div>
         </div>
-
+        
         <!-- Main Content Area -->
-        <div class="main-content">
-            <!-- Video Area -->
-            <div class="video-area">
-                <!-- View Toggle -->
-                <div class="view-controls">
-                    <button id="gridViewBtn" class="view-btn active" title="Grid View">
-                        <span class="view-icon">⊞</span> Grid
-                    </button>
-                    <button id="speakerViewBtn" class="view-btn" title="Speaker View">
-                        <span class="view-icon">▭</span> Speaker
-                    </button>
+        <div class="flex-1 flex overflow-hidden">
+            
+            <!-- Video Grid -->
+            <div class="flex-1 p-2 md:p-4 overflow-y-auto">
+                <div id="videoGrid" class="video-grid grid gap-2 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
+                    <!-- Video containers will be added here dynamically -->
                 </div>
-
-                <!-- Video Grid -->
-                <div id="videoGrid" class="video-grid grid-view">
-                    <!-- Videos will be added here dynamically -->
-                </div>
-
-                <!-- Reactions Overlay -->
-                <div id="reactionsOverlay" class="reactions-overlay"></div>
             </div>
-
-            <!-- Chat Panel -->
-            <div id="chatPanel" class="chat-panel">
-                <div class="chat-header">
-                    <h3>Chat</h3>
-                    <button id="closeChatBtn" class="close-chat-btn" title="Close Chat">✕</button>
-                </div>
-                <div class="chat-messages" id="chatMessages">
-                    <div class="chat-empty">No messages yet. Start the conversation!</div>
-                </div>
-                <div class="chat-input-container">
-                    <input
-                        type="text"
-                        id="chatInput"
-                        placeholder="Type a message..."
-                        maxlength="500"
-                    >
-                    <button id="sendChatBtn" class="send-chat-btn" title="Send Message">
-                        <span class="send-icon">➤</span>
+            
+            <!-- Participant List Sidebar (Mobile: Overlay, Desktop: Sidebar) -->
+            <div id="participantPanel" class="hidden fixed md:relative right-0 top-0 h-full w-full md:w-80 bg-gray-800 border-l border-gray-700 z-40 flex flex-col">
+                <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+                    <h3 class="font-semibold">Participants</h3>
+                    <button id="closeParticipantBtn" class="md:hidden p-2 hover:bg-gray-700 rounded-lg">
+                        <i class="fas fa-times"></i>
                     </button>
+                </div>
+                <div id="participantList" class="flex-1 overflow-y-auto participant-list p-4 space-y-2">
+                    <!-- Participant items will be added here -->
+                </div>
+            </div>
+            
+            <!-- Chat Panel (Mobile: Overlay, Desktop: Sidebar) -->
+            <div id="chatPanel" class="hidden fixed md:relative right-0 top-0 h-full w-full md:w-96 bg-gray-800 border-l border-gray-700 z-40 flex flex-col">
+                <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+                    <h3 class="font-semibold">Chat</h3>
+                    <button id="closeChatBtn" class="p-2 hover:bg-gray-700 rounded-lg">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="chatMessages" class="flex-1 overflow-y-auto chat-messages p-4 space-y-3">
+                    <!-- Chat messages will be added here -->
+                </div>
+                <div class="p-4 border-t border-gray-700">
+                    <div class="flex space-x-2">
+                        <input type="text" id="chatInput" 
+                               class="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                               placeholder="Type a message...">
+                        <button id="sendChatBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors control-btn">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
-
+        
         <!-- Bottom Control Bar -->
-        <div class="bottom-controls">
-            <div class="controls-left">
-                <div class="meeting-info-small">
-                    <span id="bottomMeetingTime">00:00</span>
-                </div>
-            </div>
-
-            <div class="controls-center">
-                <button id="toggleAudioBtn" class="control-btn" title="Microphone">
-                    <span class="control-icon">🎤</span>
-                    <span class="control-label">Mute</span>
+        <div class="bg-gray-800 border-t border-gray-700 px-4 py-3">
+            <div class="flex items-center justify-center space-x-2 md:space-x-4 flex-wrap">
+                <button id="toggleAudioBtn" class="control-btn px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors flex items-center space-x-2">
+                    <i class="fas fa-microphone text-lg"></i>
+                    <span class="hidden md:inline">Mute</span>
                 </button>
-
-                <button id="toggleVideoBtn" class="control-btn" title="Camera">
-                    <span class="control-icon">📹</span>
-                    <span class="control-label">Stop Video</span>
+                
+                <button id="toggleVideoBtn" class="control-btn px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors flex items-center space-x-2">
+                    <i class="fas fa-video text-lg"></i>
+                    <span class="hidden md:inline">Stop Video</span>
                 </button>
-
-                <button id="toggleChatBtn" class="control-btn" title="Chat">
-                    <span class="control-icon">💬</span>
-                    <span class="control-label">Chat</span>
-                    <span id="unreadBadge" class="unread-badge hidden">0</span>
+                
+                <button id="recordBtn" class="control-btn px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors flex items-center space-x-2">
+                    <i class="fas fa-circle text-lg"></i>
+                    <span class="hidden md:inline">Record</span>
                 </button>
-
-                <button id="reactionsBtn" class="control-btn" title="Reactions">
-                    <span class="control-icon">😊</span>
-                    <span class="control-label">React</span>
+                
+                <button id="toggleChatBtn" class="control-btn relative px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors flex items-center space-x-2">
+                    <i class="fas fa-comment text-lg"></i>
+                    <span class="hidden md:inline">Chat</span>
+                    <span id="unreadBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>
                 </button>
-
-                <button id="recordBtn" class="control-btn" title="Record">
-                    <span class="control-icon">⏺️</span>
-                    <span class="control-label">Record</span>
+                
+                <button id="reactionsBtn" class="control-btn px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors">
+                    <i class="fas fa-smile text-lg"></i>
                 </button>
-
-                <button id="moreOptionsBtn" class="control-btn" title="More Options">
-                    <span class="control-icon">⋮</span>
-                    <span class="control-label">More</span>
-                </button>
-
-                <button id="leaveMeetingBtn" class="control-btn leave-btn" title="Leave Meeting">
-                    <span class="control-icon">📞</span>
-                    <span class="control-label">Leave</span>
+                
+                <button id="leaveMeetingBtn" class="control-btn px-4 md:px-6 py-3 bg-red-600 hover:bg-red-700 rounded-full transition-colors flex items-center space-x-2">
+                    <i class="fas fa-phone-slash text-lg"></i>
+                    <span class="hidden md:inline">Leave</span>
                 </button>
             </div>
-
-            <div class="controls-right">
-                <!-- Placeholder for future features -->
-            </div>
-        </div>
-
-        <!-- Reactions Picker Popup -->
-        <div id="reactionsPicker" class="reactions-picker hidden">
-            <button class="reaction-emoji" data-emoji="👍">👍</button>
-            <button class="reaction-emoji" data-emoji="❤️">❤️</button>
-            <button class="reaction-emoji" data-emoji="😂">😂</button>
-            <button class="reaction-emoji" data-emoji="👏">👏</button>
-            <button class="reaction-emoji" data-emoji="🎉">🎉</button>
-            <button class="reaction-emoji" data-emoji="🔥">🔥</button>
-        </div>
-
-        <!-- More Options Menu -->
-        <div id="moreOptionsMenu" class="more-options-menu hidden">
-            <button id="shareScreenBtn" class="menu-item">
-                <span class="menu-icon">🖥️</span>
-                Share Screen
-            </button>
-            <button id="copyLinkBtn" class="menu-item">
-                <span class="menu-icon">🔗</span>
-                Copy Meeting Link
-            </button>
-            <div class="menu-divider"></div>
-            <button id="settingsBtn" class="menu-item">
-                <span class="menu-icon">⚙️</span>
-                Settings
-            </button>
         </div>
     </div>
-
-    <!-- Status Messages -->
-    <div id="statusMessage" class="status-message hidden"></div>
-
+    
+    <!-- Reactions Picker -->
+    <div id="reactionsPicker" class="hidden fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-800 rounded-full px-4 py-3 shadow-2xl z-50 flex space-x-3">
+        <button class="reaction-emoji text-3xl hover:scale-125 transition-transform" data-emoji="👍">👍</button>
+        <button class="reaction-emoji text-3xl hover:scale-125 transition-transform" data-emoji="❤️">❤️</button>
+        <button class="reaction-emoji text-3xl hover:scale-125 transition-transform" data-emoji="😂">😂</button>
+        <button class="reaction-emoji text-3xl hover:scale-125 transition-transform" data-emoji="👏">👏</button>
+        <button class="reaction-emoji text-3xl hover:scale-125 transition-transform" data-emoji="🎉">🎉</button>
+        <button class="reaction-emoji text-3xl hover:scale-125 transition-transform" data-emoji="🙏">🙏</button>
+    </div>
+    
+    <!-- Reactions Overlay -->
+    <div id="reactionsOverlay" class="fixed inset-0 pointer-events-none z-30"></div>
+    
+    <!-- Toast Notifications Container -->
+    <div id="toastContainer" class="fixed top-20 right-4 z-50 space-y-2 max-w-sm">
+        <!-- Toast notifications will be added here -->
+    </div>
+    
     <!-- Loading Spinner -->
-    <div id="loadingSpinner" class="loading-spinner hidden">
-        <div class="spinner"></div>
-        <p>Connecting to meeting...</p>
+    <div id="loadingSpinner" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="spinner mx-auto mb-4"></div>
+            <p class="text-lg">Connecting...</p>
+        </div>
     </div>
-
-    <script src="/static/app.js"></script>
+    
+    <script src="app_new.js"></script>
 </body>
 </html>
 
