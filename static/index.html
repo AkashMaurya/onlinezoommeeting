@@ -35,6 +35,7 @@
             height: 100%;
             object-fit: cover;
             border-radius: 0.5rem;
+            transform: scaleX(1); /* Ensure no mirroring */
         }
         
         .video-container {
@@ -149,6 +150,104 @@
             background: #6b7280;
             border-radius: 3px;
         }
+
+        /* Screen sharing indicator */
+        .screen-sharing-indicator {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: #ef4444;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            z-index: 10;
+            animation: pulse-indicator 2s infinite;
+        }
+
+        @keyframes pulse-indicator {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Speaker view styles */
+        .video-grid.speaker-view {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .video-grid.speaker-view .video-container.main-speaker {
+            flex: 1;
+            max-height: calc(100vh - 300px);
+        }
+
+        .video-grid.speaker-view .thumbnails-container {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 8px;
+        }
+
+        .video-grid.speaker-view .video-container:not(.main-speaker) {
+            width: 150px;
+            height: 100px;
+            flex-shrink: 0;
+        }
+
+        /* Active speaker border */
+        .video-container.active-speaker {
+            border: 3px solid #10b981 !important;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+        }
+
+        /* Modern button styles */
+        .modern-btn {
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .modern-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
+        }
+
+        .modern-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Gradient backgrounds */
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .gradient-bg-blue {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        }
+
+        /* Enhanced control bar */
+        .control-bar {
+            background: linear-gradient(to top, rgba(17, 24, 39, 0.95), rgba(31, 41, 55, 0.95));
+            backdrop-filter: blur(10px);
+        }
+
+        /* Smooth transitions */
+        * {
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        /* Host control buttons */
+        .host-control-btn {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+
+        .host-control-btn:hover {
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white overflow-hidden">
@@ -215,11 +314,20 @@
             </div>
             
             <div class="flex items-center space-x-4">
+                <div class="hidden md:flex items-center space-x-2 bg-gray-700 rounded-lg p-1">
+                    <button id="gridViewBtn" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors text-sm">
+                        <i class="fas fa-th"></i> Grid
+                    </button>
+                    <button id="speakerViewBtn" class="px-3 py-2 hover:bg-gray-600 rounded transition-colors text-sm">
+                        <i class="fas fa-user"></i> Speaker
+                    </button>
+                </div>
+
                 <button id="participantListBtn" class="flex items-center space-x-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors control-btn">
                     <i class="fas fa-users"></i>
                     <span id="navParticipantCount" class="font-semibold">1</span>
                 </button>
-                
+
                 <button id="lowDataModeBtn" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors control-btn hidden md:block">
                     <i class="fas fa-signal"></i>
                 </button>
@@ -274,7 +382,7 @@
         </div>
         
         <!-- Bottom Control Bar -->
-        <div class="bg-gray-800 border-t border-gray-700 px-4 py-3">
+        <div class="control-bar border-t border-gray-700 px-4 py-3">
             <div class="flex items-center justify-center space-x-2 md:space-x-4 flex-wrap">
                 <button id="toggleAudioBtn" class="control-btn px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors flex items-center space-x-2">
                     <i class="fas fa-microphone text-lg"></i>
@@ -286,12 +394,17 @@
                     <span class="hidden md:inline">Stop Video</span>
                 </button>
                 
-                <button id="recordBtn" class="control-btn px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors flex items-center space-x-2">
-                    <i class="fas fa-circle text-lg"></i>
-                    <span class="hidden md:inline">Record</span>
+                <button id="shareScreenBtn" class="control-btn px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors flex items-center space-x-2 modern-btn">
+                    <i class="fas fa-desktop text-lg"></i>
+                    <span class="hidden md:inline">Share</span>
                 </button>
-                
-                <button id="toggleChatBtn" class="control-btn relative px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors flex items-center space-x-2">
+
+                <button id="recordBtn" class="control-btn px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors flex items-center space-x-2 modern-btn">
+                    <i class="fas fa-microphone text-lg"></i>
+                    <span class="hidden md:inline">Audio Record</span>
+                </button>
+
+                <button id="toggleChatBtn" class="control-btn relative px-4 md:px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors flex items-center space-x-2 modern-btn">
                     <i class="fas fa-comment text-lg"></i>
                     <span class="hidden md:inline">Chat</span>
                     <span id="unreadBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>

@@ -4,6 +4,7 @@
 
 // ===== GLOBAL VARIABLES =====
 let localStream = null;
+let screenStream = null;
 let peers = {};
 let ws = null;
 let meetingId = null;
@@ -24,6 +25,11 @@ let participants = {};
 let isHost = false;
 let hostId = null;
 let lowDataMode = false;
+let isScreenSharing = false;
+let currentView = 'grid'; // 'grid' or 'speaker'
+let activeSpeakerId = null;
+let audioContext = null;
+let audioAnalysers = {};
 
 // ICE servers configuration with multiple STUN servers for better connectivity
 const iceServers = {
@@ -69,6 +75,9 @@ const participantList = document.getElementById('participantList');
 const hostBadge = document.getElementById('hostBadge');
 const lowDataModeBtn = document.getElementById('lowDataModeBtn');
 const toastContainer = document.getElementById('toastContainer');
+const shareScreenBtn = document.getElementById('shareScreenBtn');
+const gridViewBtn = document.getElementById('gridViewBtn');
+const speakerViewBtn = document.getElementById('speakerViewBtn');
 
 // ===== EVENT LISTENERS =====
 createMeetingBtn.addEventListener('click', createMeeting);
@@ -92,6 +101,9 @@ chatInput.addEventListener('keypress', (e) => {
 
 reactionsBtn.addEventListener('click', toggleReactionsPicker);
 recordBtn.addEventListener('click', toggleRecording);
+shareScreenBtn.addEventListener('click', toggleScreenShare);
+gridViewBtn.addEventListener('click', () => switchView('grid'));
+speakerViewBtn.addEventListener('click', () => switchView('speaker'));
 
 // Reaction emoji buttons
 document.querySelectorAll('.reaction-emoji').forEach(btn => {
@@ -174,7 +186,10 @@ async function joinMeeting() {
         
         // Start meeting timer
         startMeetingTimer();
-        
+
+        // Setup active speaker detection
+        setupActiveSpeakerDetection();
+
         showLoading(false);
         showToast('Joined meeting successfully!', 'success');
     } catch (error) {
@@ -427,6 +442,11 @@ function addVideoStream(id, stream, label, isLocal) {
 
     if (!isLocal) {
         participantStates[id] = { video: true, audio: true };
+        // Add audio analyser for active speaker detection
+        addAudioAnalyser(id, stream);
+    } else {
+        // Add audio analyser for local stream too
+        addAudioAnalyser('local', stream);
     }
 }
 
@@ -539,6 +559,24 @@ function hostStopVideo(participantId) {
     showToast('Stop video request sent', 'info');
 }
 
+function kickParticipant(participantId, participantName) {
+    if (!isHost) return;
+
+    // Show confirmation dialog
+    const confirmed = confirm(`Are you sure you want to remove ${participantName} from the meeting?`);
+
+    if (confirmed) {
+        ws.send(JSON.stringify({
+            type: 'host_control',
+            target_id: participantId,
+            action: 'kick',
+            value: true
+        }));
+
+        showToast(`${participantName} has been removed from the meeting`, 'warning');
+    }
+}
+
 function handleHostControl(message) {
     if (!message.from_host) return;
 
@@ -555,6 +593,12 @@ function handleHostControl(message) {
             toggleVideo();
             showToast('Host has stopped your video', 'warning');
         }
+    } else if (action === 'kick' && value) {
+        // Participant has been kicked by host
+        showToast('You have been removed from the meeting by the host', 'error');
+        setTimeout(() => {
+            leaveMeeting();
+        }, 2000);
     }
 }
 
@@ -696,13 +740,39 @@ function startRecording() {
     if (!localStream) return;
 
     try {
-        // Use MP3 format for smaller file size
-        recorder = new RecordRTC(localStream, {
+        // Create audio context to mix all audio streams
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        // Get all audio tracks from local and remote streams
+        const audioTracks = [];
+
+        // Add local audio
+        localStream.getAudioTracks().forEach(track => {
+            if (track.enabled) audioTracks.push(track);
+        });
+
+        // Add remote audio from all peers
+        Object.values(peers).forEach(peer => {
+            if (peer._remoteStreams && peer._remoteStreams[0]) {
+                peer._remoteStreams[0].getAudioTracks().forEach(track => {
+                    audioTracks.push(track);
+                });
+            }
+        });
+
+        // Create a mixed audio stream
+        const mixedStream = new MediaStream(audioTracks);
+
+        // Record as MP3 (audio only)
+        recorder = new RecordRTC(mixedStream, {
             type: 'audio',
-            mimeType: 'audio/webm', // WebM is widely supported, will convert to MP3 on download
+            mimeType: 'audio/wav', // WAV for better compatibility, will save as MP3
             recorderType: RecordRTC.StereoAudioRecorder,
-            numberOfAudioChannels: 1,
-            desiredSampRate: 16000 // Lower sample rate for smaller file size
+            numberOfAudioChannels: 2,
+            desiredSampRate: 44100, // CD quality for MP3
+            timeSlice: 1000
         });
 
         recorder.startRecording();
@@ -712,7 +782,7 @@ function startRecording() {
         recordBtn.classList.add('bg-red-600', 'animate-pulse');
         recordBtn.querySelector('i').className = 'fas fa-stop text-lg';
 
-        showToast('Recording started', 'success');
+        showToast('Audio recording started (MP3)', 'success');
     } catch (error) {
         console.error('Recording error:', error);
         showToast('Failed to start recording', 'error');
@@ -728,7 +798,8 @@ function stopRecording() {
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
-        a.download = `church-meeting-${meetingId}-${Date.now()}.webm`;
+        // Save as MP3 format
+        a.download = `church-meeting-audio-${meetingId}-${Date.now()}.mp3`;
         document.body.appendChild(a);
         a.click();
 
@@ -742,8 +813,251 @@ function stopRecording() {
         recordBtn.classList.add('bg-gray-700');
         recordBtn.querySelector('i').className = 'fas fa-circle text-lg';
 
-        showToast('Recording saved', 'success');
+        showToast('Recording saved as MP3', 'success');
     });
+}
+
+// ===== SCREEN SHARING FUNCTIONS =====
+async function toggleScreenShare() {
+    if (isScreenSharing) {
+        stopScreenShare();
+    } else {
+        await startScreenShare();
+    }
+}
+
+async function startScreenShare() {
+    try {
+        // Request screen sharing with audio
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+                cursor: 'always',
+                displaySurface: 'monitor'
+            },
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                sampleRate: 44100
+            }
+        });
+
+        // Replace video track in all peer connections
+        const screenVideoTrack = screenStream.getVideoTracks()[0];
+        const screenAudioTrack = screenStream.getAudioTracks()[0];
+
+        Object.values(peers).forEach(peer => {
+            // Replace video track
+            const sender = peer._pc.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) {
+                sender.replaceTrack(screenVideoTrack);
+            }
+
+            // Add audio track if available
+            if (screenAudioTrack) {
+                peer._pc.addTrack(screenAudioTrack, screenStream);
+            }
+        });
+
+        // Update local video display
+        const localVideo = document.querySelector('#video-local video');
+        if (localVideo) {
+            localVideo.srcObject = screenStream;
+        }
+
+        // Add screen sharing indicator
+        const localContainer = document.getElementById('video-local');
+        if (localContainer) {
+            const indicator = document.createElement('div');
+            indicator.className = 'screen-sharing-indicator';
+            indicator.id = 'screen-indicator';
+            indicator.innerHTML = '<i class="fas fa-desktop mr-1"></i> Sharing Screen';
+            localContainer.appendChild(indicator);
+        }
+
+        // Update button state
+        shareScreenBtn.classList.remove('bg-gray-700');
+        shareScreenBtn.classList.add('bg-blue-600');
+        shareScreenBtn.querySelector('i').className = 'fas fa-stop-circle text-lg';
+
+        isScreenSharing = true;
+
+        // Handle screen share stop (when user clicks browser's stop button)
+        screenVideoTrack.onended = () => {
+            stopScreenShare();
+        };
+
+        showToast('Screen sharing started', 'success');
+
+        // Broadcast screen sharing state
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'screen_share',
+                sharing: true
+            }));
+        }
+    } catch (error) {
+        console.error('Screen sharing error:', error);
+        showToast('Failed to start screen sharing', 'error');
+    }
+}
+
+function stopScreenShare() {
+    if (!screenStream) return;
+
+    // Stop all screen stream tracks
+    screenStream.getTracks().forEach(track => track.stop());
+
+    // Replace with original camera video
+    const cameraVideoTrack = localStream.getVideoTracks()[0];
+
+    Object.values(peers).forEach(peer => {
+        const sender = peer._pc.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender && cameraVideoTrack) {
+            sender.replaceTrack(cameraVideoTrack);
+        }
+    });
+
+    // Update local video display
+    const localVideo = document.querySelector('#video-local video');
+    if (localVideo) {
+        localVideo.srcObject = localStream;
+    }
+
+    // Remove screen sharing indicator
+    const indicator = document.getElementById('screen-indicator');
+    if (indicator) {
+        indicator.remove();
+    }
+
+    // Update button state
+    shareScreenBtn.classList.remove('bg-blue-600');
+    shareScreenBtn.classList.add('bg-gray-700');
+    shareScreenBtn.querySelector('i').className = 'fas fa-desktop text-lg';
+
+    isScreenSharing = false;
+    screenStream = null;
+
+    showToast('Screen sharing stopped', 'info');
+
+    // Broadcast screen sharing state
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'screen_share',
+            sharing: false
+        }));
+    }
+}
+
+// ===== VIEW TOGGLE FUNCTIONS =====
+function switchView(view) {
+    currentView = view;
+
+    if (view === 'grid') {
+        videoGrid.classList.remove('speaker-view');
+        videoGrid.classList.add('grid-view');
+        gridViewBtn.classList.add('bg-blue-600');
+        gridViewBtn.classList.remove('hover:bg-gray-600');
+        speakerViewBtn.classList.remove('bg-blue-600');
+        speakerViewBtn.classList.add('hover:bg-gray-600');
+    } else {
+        videoGrid.classList.remove('grid-view');
+        videoGrid.classList.add('speaker-view');
+        speakerViewBtn.classList.add('bg-blue-600');
+        speakerViewBtn.classList.remove('hover:bg-gray-600');
+        gridViewBtn.classList.remove('bg-blue-600');
+        gridViewBtn.classList.add('hover:bg-gray-600');
+
+        // Rearrange videos for speaker view
+        arrangeForSpeakerView();
+    }
+
+    showToast(`Switched to ${view} view`, 'info');
+}
+
+function arrangeForSpeakerView() {
+    const videoContainers = Array.from(videoGrid.children);
+
+    // Find active speaker or use first video
+    let mainSpeaker = videoContainers.find(v => v.classList.contains('active-speaker'));
+    if (!mainSpeaker && videoContainers.length > 0) {
+        mainSpeaker = videoContainers[0];
+    }
+
+    if (mainSpeaker) {
+        mainSpeaker.classList.add('main-speaker');
+        videoGrid.prepend(mainSpeaker);
+    }
+
+    // Mark others as thumbnails
+    videoContainers.forEach(v => {
+        if (v !== mainSpeaker) {
+            v.classList.remove('main-speaker');
+        }
+    });
+}
+
+// ===== ACTIVE SPEAKER DETECTION =====
+function setupActiveSpeakerDetection() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    // Monitor all audio streams
+    setInterval(() => {
+        let maxVolume = 0;
+        let loudestId = null;
+
+        Object.keys(audioAnalysers).forEach(id => {
+            const analyser = audioAnalysers[id];
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+
+            if (average > maxVolume && average > 30) { // Threshold for speech
+                maxVolume = average;
+                loudestId = id;
+            }
+        });
+
+        // Update active speaker
+        if (loudestId && loudestId !== activeSpeakerId) {
+            // Remove previous active speaker highlight
+            if (activeSpeakerId) {
+                const prevContainer = document.getElementById(`video-${activeSpeakerId}`);
+                if (prevContainer) {
+                    prevContainer.classList.remove('active-speaker');
+                }
+            }
+
+            // Add new active speaker highlight
+            const newContainer = document.getElementById(`video-${loudestId}`);
+            if (newContainer) {
+                newContainer.classList.add('active-speaker');
+                activeSpeakerId = loudestId;
+
+                // If in speaker view, make this the main speaker
+                if (currentView === 'speaker') {
+                    arrangeForSpeakerView();
+                }
+            }
+        }
+    }, 500); // Check every 500ms
+}
+
+function addAudioAnalyser(id, stream) {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length > 0) {
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        audioAnalysers[id] = analyser;
+    }
 }
 
 // ===== PARTICIPANT LIST FUNCTIONS =====
@@ -827,6 +1141,30 @@ function addParticipantToList(id, name, isSelf, isParticipantHost) {
     info.appendChild(avatar);
     info.appendChild(details);
     item.appendChild(info);
+
+    // Add host controls if current user is host and this is not self
+    if (isHost && !isSelf) {
+        const controls = document.createElement('div');
+        controls.className = 'flex items-center space-x-2';
+
+        // Mute button
+        const muteBtn = document.createElement('button');
+        muteBtn.className = 'host-control-btn bg-yellow-600 hover:bg-yellow-700 text-white';
+        muteBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+        muteBtn.title = 'Mute participant';
+        muteBtn.onclick = () => hostMuteParticipant(id);
+
+        // Kick button
+        const kickBtn = document.createElement('button');
+        kickBtn.className = 'host-control-btn bg-red-600 hover:bg-red-700 text-white';
+        kickBtn.innerHTML = '<i class="fas fa-user-times"></i>';
+        kickBtn.title = 'Remove participant';
+        kickBtn.onclick = () => kickParticipant(id, name);
+
+        controls.appendChild(muteBtn);
+        controls.appendChild(kickBtn);
+        item.appendChild(controls);
+    }
 
     participantList.appendChild(item);
 }
