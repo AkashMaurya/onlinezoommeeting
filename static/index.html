@@ -86,6 +86,15 @@
             min-height: 48px;
             touch-action: manipulation;
         }
+
+        /* Ensure leave button is always visible on mobile */
+        @media (max-width: 768px) {
+            #leaveMeetingBtn {
+                display: flex !important;
+                min-width: 56px;
+                min-height: 56px;
+            }
+        }
         
         /* Low data mode indicator */
         .low-data-active {

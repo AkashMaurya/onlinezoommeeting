@@ -179,6 +179,18 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str, participant_
                     exclude_participant=participant_id
                 )
 
+            # Handle recording status announcements
+            elif message_type == "recording_status":
+                await broadcast_to_meeting(
+                    meeting_id,
+                    {
+                        "type": "recording_status",
+                        "status": message.get("status"),
+                        "participant_id": participant_id
+                    }
+                )
+                logger.info(f"Recording {message.get('status')} by {participant_id}")
+
             # Handle host control commands
             elif message_type == "host_control":
                 # Verify sender is the host

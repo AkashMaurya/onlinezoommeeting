@@ -280,7 +280,16 @@ function connectWebSocket() {
             case 'host_control':
                 handleHostControl(message);
                 break;
-            
+
+            case 'recording_status':
+                // Play announcement when someone starts/stops recording
+                if (message.participant_id !== participantId) {
+                    playRecordingAnnouncement(message.status);
+                    const username = participants[message.participant_id]?.username || 'Someone';
+                    showToast(`${username} ${message.status} recording`, 'info');
+                }
+                break;
+
             case 'offer':
             case 'answer':
             case 'ice-candidate':
@@ -302,16 +311,20 @@ function connectWebSocket() {
 // ===== PEER CONNECTION FUNCTIONS =====
 function createPeerConnection(peerId, initiator) {
     console.log(`Creating peer connection with ${peerId}, initiator: ${initiator}`);
-    
+
     // FIX: Ensure localStream is available before creating peer
     if (!localStream) {
         console.error('Local stream not available');
         return;
     }
-    
+
+    // Use screen stream if currently sharing, otherwise use local stream
+    const streamToSend = isScreenSharing && screenStream ? screenStream : localStream;
+    console.log(`Using ${isScreenSharing ? 'screen' : 'camera'} stream for new peer`);
+
     const peer = new SimplePeer({
         initiator: initiator,
-        stream: localStream,
+        stream: streamToSend,
         config: iceServers,
         trickle: true,
         // FIX: Add reconnection options
@@ -329,28 +342,32 @@ function createPeerConnection(peerId, initiator) {
     });
     
     peer.on('stream', (remoteStream) => {
-        console.log('Received stream from', peerId);
+        console.log('✅ Received stream from', peerId, 'tracks:', remoteStream.getTracks().length);
         const participantInfo = participants[peerId] || { username: 'Participant', isHost: false };
         addVideoStream(peerId, remoteStream, participantInfo.username, false);
+
+        // Update participant state to show they have video/audio
+        participantStates[peerId] = {
+            video: remoteStream.getVideoTracks().length > 0 && remoteStream.getVideoTracks()[0].enabled,
+            audio: remoteStream.getAudioTracks().length > 0 && remoteStream.getAudioTracks()[0].enabled
+        };
     });
-    
+
+    peer.on('connect', () => {
+        console.log('✅ Peer connected:', peerId);
+    });
+
     peer.on('error', (err) => {
-        console.error('Peer error with', peerId, ':', err);
-        // FIX: Attempt to recreate connection on error
-        setTimeout(() => {
-            if (peers[peerId]) {
-                console.log('Attempting to recreate peer connection with', peerId);
-                delete peers[peerId];
-                createPeerConnection(peerId, initiator);
-            }
-        }, 2000);
+        console.error('❌ Peer error with', peerId, ':', err);
+        showToast(`Connection error with ${participants[peerId]?.username || 'participant'}`, 'error');
     });
-    
+
     peer.on('close', () => {
-        console.log('Peer connection closed:', peerId);
+        console.log('🔌 Peer connection closed:', peerId);
         removeVideoStream(peerId);
+        delete participantStates[peerId];
     });
-    
+
     peers[peerId] = peer;
 }
 
@@ -450,6 +467,7 @@ function addVideoStream(id, stream, label, isLocal) {
     }
 
     videoGrid.appendChild(videoContainer);
+    console.log(`📹 Added video stream for ${label} (${id}), isLocal: ${isLocal}`);
 
     if (!isLocal) {
         participantStates[id] = { video: true, audio: true };
@@ -459,6 +477,14 @@ function addVideoStream(id, stream, label, isLocal) {
         // Add audio analyser for local stream too
         addAudioAnalyser('local', stream);
     }
+
+    // Ensure video plays (sometimes autoplay fails)
+    setTimeout(() => {
+        const videoEl = videoContainer.querySelector('video');
+        if (videoEl && videoEl.paused) {
+            videoEl.play().catch(err => console.warn('Video autoplay failed:', err));
+        }
+    }, 100);
 }
 
 function removeVideoStream(id) {
@@ -762,34 +788,60 @@ function startRecording() {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        // Get all audio tracks from local and remote streams
-        const audioTracks = [];
+        // Resume audio context if suspended (required by some browsers)
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
 
-        // Add local audio
-        localStream.getAudioTracks().forEach(track => {
-            if (track.enabled) audioTracks.push(track);
-        });
+        // Create a destination for mixed audio
+        const destination = audioContext.createMediaStreamDestination();
 
-        // Add remote audio from all peers
-        Object.values(peers).forEach(peer => {
+        console.log('🎙️ Starting recording with audio mixing...');
+
+        // Add local audio to mix
+        if (localStream.getAudioTracks().length > 0) {
+            const localSource = audioContext.createMediaStreamSource(localStream);
+            localSource.connect(destination);
+            console.log('✅ Added local audio to mix');
+        }
+
+        // Add remote audio from all peers to mix
+        let remoteCount = 0;
+        Object.entries(peers).forEach(([peerId, peer]) => {
             if (peer._remoteStreams && peer._remoteStreams[0]) {
-                peer._remoteStreams[0].getAudioTracks().forEach(track => {
-                    audioTracks.push(track);
-                });
+                const remoteStream = peer._remoteStreams[0];
+                if (remoteStream.getAudioTracks().length > 0) {
+                    try {
+                        const remoteSource = audioContext.createMediaStreamSource(remoteStream);
+                        remoteSource.connect(destination);
+                        remoteCount++;
+                        console.log(`✅ Added remote audio from ${peerId} to mix`);
+                    } catch (err) {
+                        console.warn(`⚠️ Could not add audio from ${peerId}:`, err);
+                    }
+                }
             }
         });
 
-        // Create a mixed audio stream
-        const mixedStream = new MediaStream(audioTracks);
+        console.log(`🎵 Mixed ${remoteCount} remote audio sources`);
 
-        // Record as MP3 (audio only)
+        // Get the mixed stream
+        const mixedStream = destination.stream;
+
+        // Check if we have audio tracks
+        if (mixedStream.getAudioTracks().length === 0) {
+            throw new Error('No audio tracks available for recording');
+        }
+
+        // Record as WAV (audio only) - more reliable than MP3
         recorder = new RecordRTC(mixedStream, {
             type: 'audio',
-            mimeType: 'audio/wav', // WAV for better compatibility, will save as MP3
+            mimeType: 'audio/wav',
             recorderType: RecordRTC.StereoAudioRecorder,
             numberOfAudioChannels: 2,
-            desiredSampRate: 44100, // CD quality for MP3
-            timeSlice: 1000
+            desiredSampRate: 44100,
+            timeSlice: 1000,
+            bufferSize: 16384
         });
 
         recorder.startRecording();
@@ -799,10 +851,22 @@ function startRecording() {
         recordBtn.classList.add('bg-red-600', 'animate-pulse');
         recordBtn.querySelector('i').className = 'fas fa-stop text-lg';
 
-        showToast('Audio recording started (MP3)', 'success');
+        // Broadcast recording status to all participants
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'recording_status',
+                status: 'started',
+                participant_id: participantId
+            }));
+        }
+
+        // Play announcement locally
+        playRecordingAnnouncement('started');
+
+        showToast('Audio recording started', 'success');
     } catch (error) {
-        console.error('Recording error:', error);
-        showToast('Failed to start recording', 'error');
+        console.error('❌ Recording error:', error);
+        showToast('Failed to start recording: ' + error.message, 'error');
     }
 }
 
@@ -811,12 +875,26 @@ function stopRecording() {
 
     recorder.stopRecording(() => {
         const blob = recorder.getBlob();
+
+        // Check if blob has content
+        if (blob.size === 0) {
+            console.error('❌ Recording blob is empty');
+            showToast('Recording failed: No audio captured', 'error');
+            isRecording = false;
+            recordBtn.classList.remove('bg-red-600', 'animate-pulse');
+            recordBtn.classList.add('bg-gray-700');
+            recordBtn.querySelector('i').className = 'fas fa-microphone text-lg';
+            return;
+        }
+
+        console.log(`✅ Recording complete: ${(blob.size / 1024).toFixed(2)} KB`);
+
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
-        // Save as MP3 format
-        a.download = `church-meeting-audio-${meetingId}-${Date.now()}.mp3`;
+        // Save as WAV format (can be converted to MP3 offline if needed)
+        a.download = `church-meeting-audio-${meetingId}-${Date.now()}.wav`;
         document.body.appendChild(a);
         a.click();
 
@@ -828,10 +906,54 @@ function stopRecording() {
         isRecording = false;
         recordBtn.classList.remove('bg-red-600', 'animate-pulse');
         recordBtn.classList.add('bg-gray-700');
-        recordBtn.querySelector('i').className = 'fas fa-circle text-lg';
+        recordBtn.querySelector('i').className = 'fas fa-microphone text-lg';
 
-        showToast('Recording saved as MP3', 'success');
+        // Broadcast recording status to all participants
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'recording_status',
+                status: 'stopped',
+                participant_id: participantId
+            }));
+        }
+
+        // Play announcement locally
+        playRecordingAnnouncement('stopped');
+
+        showToast(`Recording saved (${(blob.size / 1024 / 1024).toFixed(2)} MB)`, 'success');
     });
+}
+
+// Play recording announcement (not included in recording)
+function playRecordingAnnouncement(status) {
+    try {
+        // Create a simple beep sound using Web Audio API
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        // Different tones for start/stop
+        if (status === 'started') {
+            oscillator.frequency.value = 800; // Higher pitch for start
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+        } else {
+            oscillator.frequency.value = 400; // Lower pitch for stop
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.5);
+        }
+
+        console.log(`🔔 Played recording ${status} announcement`);
+    } catch (error) {
+        console.warn('Could not play announcement:', error);
+    }
 }
 
 // ===== SCREEN SHARING FUNCTIONS =====
@@ -862,16 +984,32 @@ async function startScreenShare() {
         const screenVideoTrack = screenStream.getVideoTracks()[0];
         const screenAudioTrack = screenStream.getAudioTracks()[0];
 
-        Object.values(peers).forEach(peer => {
-            // Replace video track
-            const sender = peer._pc.getSenders().find(s => s.track && s.track.kind === 'video');
-            if (sender) {
-                sender.replaceTrack(screenVideoTrack);
-            }
+        console.log('🖥️ Replacing video tracks with screen share for', Object.keys(peers).length, 'peers');
 
-            // Add audio track if available
-            if (screenAudioTrack) {
-                peer._pc.addTrack(screenAudioTrack, screenStream);
+        Object.values(peers).forEach(peer => {
+            try {
+                // Replace video track
+                const sender = peer._pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) {
+                    sender.replaceTrack(screenVideoTrack).then(() => {
+                        console.log('✅ Screen track replaced successfully');
+                    }).catch(err => {
+                        console.error('❌ Failed to replace track:', err);
+                    });
+                } else {
+                    console.warn('⚠️ No video sender found, adding track');
+                    peer._pc.addTrack(screenVideoTrack, screenStream);
+                }
+
+                // Add audio track if available
+                if (screenAudioTrack) {
+                    const audioSender = peer._pc.getSenders().find(s => s.track && s.track.kind === 'audio' && s.track !== localStream.getAudioTracks()[0]);
+                    if (!audioSender) {
+                        peer._pc.addTrack(screenAudioTrack, screenStream);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Error replacing track for peer:', error);
             }
         });
 
@@ -927,10 +1065,20 @@ function stopScreenShare() {
     // Replace with original camera video
     const cameraVideoTrack = localStream.getVideoTracks()[0];
 
+    console.log('📹 Reverting to camera for', Object.keys(peers).length, 'peers');
+
     Object.values(peers).forEach(peer => {
-        const sender = peer._pc.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (sender && cameraVideoTrack) {
-            sender.replaceTrack(cameraVideoTrack);
+        try {
+            const sender = peer._pc.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender && cameraVideoTrack) {
+                sender.replaceTrack(cameraVideoTrack).then(() => {
+                    console.log('✅ Reverted to camera successfully');
+                }).catch(err => {
+                    console.error('❌ Failed to revert track:', err);
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error reverting track for peer:', error);
         }
     });
 
@@ -1235,6 +1383,12 @@ function toggleLowDataMode() {
 
 // ===== UTILITY FUNCTIONS =====
 function leaveMeeting() {
+    // Add confirmation dialog
+    const confirmLeave = confirm('Are you sure you want to leave the meeting?');
+    if (!confirmLeave) {
+        return;
+    }
+
     // Close all peer connections
     Object.values(peers).forEach(peer => peer.destroy());
     peers = {};
@@ -1249,6 +1403,13 @@ function leaveMeeting() {
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
+    }
+
+    // Stop screen sharing if active
+    if (screenStream) {
+        screenStream.getTracks().forEach(track => track.stop());
+        screenStream = null;
+        isScreenSharing = false;
     }
 
     // Stop recording if active
