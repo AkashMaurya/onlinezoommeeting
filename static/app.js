@@ -30,6 +30,8 @@ let currentView = 'grid'; // 'grid' or 'speaker'
 let activeSpeakerId = null;
 let audioContext = null;
 let audioAnalysers = {};
+let screenShareParticipantId = null; // Track who is sharing screen
+let screenShareFullscreenActive = false;
 
 // ICE servers configuration with multiple STUN servers for better connectivity
 const iceServers = {
@@ -81,6 +83,27 @@ const speakerViewBtn = document.getElementById('speakerViewBtn');
 const copyLinkBtn = document.getElementById('copyLinkBtn');
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 
+// Sidebar menu elements
+const hamburgerBtn = document.getElementById('hamburgerBtn');
+const sidebarMenu = document.getElementById('sidebarMenu');
+const sidebarOverlay = document.getElementById('sidebarOverlay');
+const sidebarToggleAudio = document.getElementById('sidebarToggleAudio');
+const sidebarToggleVideo = document.getElementById('sidebarToggleVideo');
+const sidebarShareScreen = document.getElementById('sidebarShareScreen');
+const sidebarRecord = document.getElementById('sidebarRecord');
+const sidebarToggleChat = document.getElementById('sidebarToggleChat');
+const sidebarParticipants = document.getElementById('sidebarParticipants');
+const sidebarToggleView = document.getElementById('sidebarToggleView');
+const sidebarTheme = document.getElementById('sidebarTheme');
+const sidebarLowData = document.getElementById('sidebarLowData');
+const sidebarCopyLink = document.getElementById('sidebarCopyLink');
+const sidebarLeave = document.getElementById('sidebarLeave');
+const sidebarMeetingId = document.getElementById('sidebarMeetingId');
+const sidebarTimer = document.getElementById('sidebarTimer');
+const sidebarParticipantCount = document.getElementById('sidebarParticipantCount');
+const sidebarUnreadBadge = document.getElementById('sidebarUnreadBadge');
+const sidebarLowDataStatus = document.getElementById('sidebarLowDataStatus');
+
 // ===== EVENT LISTENERS =====
 createMeetingBtn.addEventListener('click', createMeeting);
 joinMeetingBtn.addEventListener('click', joinMeeting);
@@ -108,6 +131,24 @@ gridViewBtn.addEventListener('click', () => switchView('grid'));
 speakerViewBtn.addEventListener('click', () => switchView('speaker'));
 copyLinkBtn.addEventListener('click', copyMeetingLink);
 themeToggleBtn.addEventListener('click', toggleTheme);
+
+// Sidebar menu event listeners
+hamburgerBtn.addEventListener('click', toggleSidebar);
+sidebarOverlay.addEventListener('click', closeSidebar);
+sidebarToggleAudio.addEventListener('click', () => { toggleAudio(); closeSidebar(); });
+sidebarToggleVideo.addEventListener('click', () => { toggleVideo(); closeSidebar(); });
+sidebarShareScreen.addEventListener('click', () => { toggleScreenShare(); closeSidebar(); });
+sidebarRecord.addEventListener('click', () => { toggleRecording(); closeSidebar(); });
+sidebarToggleChat.addEventListener('click', () => { toggleChat(); closeSidebar(); });
+sidebarParticipants.addEventListener('click', () => { toggleParticipantList(); closeSidebar(); });
+sidebarToggleView.addEventListener('click', () => {
+    switchView(currentView === 'grid' ? 'speaker' : 'grid');
+    closeSidebar();
+});
+sidebarTheme.addEventListener('click', () => { toggleTheme(); closeSidebar(); });
+sidebarLowData.addEventListener('click', () => { toggleLowDataMode(); closeSidebar(); });
+sidebarCopyLink.addEventListener('click', () => { copyMeetingLink(); closeSidebar(); });
+sidebarLeave.addEventListener('click', () => { closeSidebar(); leaveMeeting(); });
 
 // Reaction emoji buttons
 document.querySelectorAll('.reaction-emoji').forEach(btn => {
@@ -181,13 +222,16 @@ async function joinMeeting() {
         joinSection.classList.add('hidden');
         meetingSection.classList.remove('hidden');
         navMeetingId.textContent = meetingId;
-        
+
+        // Show hamburger menu button
+        hamburgerBtn.classList.remove('hidden');
+
         // Add local video
         addVideoStream('local', localStream, username + ' (You)', true);
-        
+
         // Connect to WebSocket
         connectWebSocket();
-        
+
         // Start meeting timer
         startMeetingTimer();
 
@@ -250,6 +294,11 @@ function connectWebSocket() {
                 updateParticipantCount(message.participant_count);
                 updateParticipantList();
                 showToast(`${message.username} joined the meeting`, 'info');
+
+                // FIX: Create peer connection to new participant
+                // Existing participants must initiate connection to new participant
+                console.log('🔗 Creating peer connection to new participant:', message.participant_id);
+                createPeerConnection(message.participant_id, true);
                 break;
             
             case 'participant_left':
@@ -420,6 +469,15 @@ function addVideoStream(id, stream, label, isLocal) {
     video.autoplay = true;
     video.playsInline = true;
     video.muted = isLocal; // Mute only local video to prevent feedback
+
+    // FIX: Ensure video plays (some browsers require explicit play() call)
+    video.onloadedmetadata = () => {
+        video.play().catch(err => {
+            console.error('Error playing video for', label, ':', err);
+            // Try again after user interaction
+            document.addEventListener('click', () => video.play(), { once: true });
+        });
+    };
 
     const videoInfo = document.createElement('div');
     videoInfo.className = 'absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-3';
@@ -1045,13 +1103,17 @@ async function startScreenShare() {
         shareScreenBtn.querySelector('i').className = 'fas fa-stop-circle text-lg';
 
         isScreenSharing = true;
+        screenShareParticipantId = 'local';
+
+        // Enable full-screen mode for screen sharing
+        enableScreenShareFullscreen('local');
 
         // Handle screen share stop (when user clicks browser's stop button)
         screenVideoTrack.onended = () => {
             stopScreenShare();
         };
 
-        showToast('Screen sharing started', 'success');
+        showToast('Screen sharing started - Press ESC or click Exit to stop', 'success');
 
         // Broadcast screen sharing state
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -1111,6 +1173,12 @@ function stopScreenShare() {
 
     isScreenSharing = false;
     screenStream = null;
+
+    // Disable full-screen mode
+    if (screenShareParticipantId) {
+        disableScreenShareFullscreen();
+        screenShareParticipantId = null;
+    }
 
     showToast('Screen sharing stopped', 'info');
 
@@ -1459,8 +1527,13 @@ function startMeetingTimer() {
         const minutes = Math.floor((elapsed % 3600000) / 60000);
         const seconds = Math.floor((elapsed % 60000) / 1000);
 
-        meetingTimer.textContent =
-            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        meetingTimer.textContent = timeString;
+
+        // Update sidebar timer
+        if (sidebarTimer) {
+            sidebarTimer.textContent = timeString;
+        }
     }, 1000);
 }
 
@@ -1612,6 +1685,46 @@ function copyMeetingLink() {
     });
 }
 
+// ===== SIDEBAR MENU FUNCTIONS =====
+function toggleSidebar() {
+    const isOpen = sidebarMenu.classList.contains('open');
+    if (isOpen) {
+        closeSidebar();
+    } else {
+        openSidebar();
+    }
+}
+
+function openSidebar() {
+    sidebarMenu.classList.add('open');
+    sidebarOverlay.classList.add('active');
+
+    // Update sidebar content
+    if (meetingId) {
+        sidebarMeetingId.textContent = meetingId;
+    }
+
+    // Sync participant count
+    const participantCount = Object.keys(participants).length + 1; // +1 for self
+    sidebarParticipantCount.textContent = participantCount;
+
+    // Sync unread messages
+    if (unreadMessages > 0) {
+        sidebarUnreadBadge.textContent = unreadMessages;
+        sidebarUnreadBadge.classList.remove('hidden');
+    } else {
+        sidebarUnreadBadge.classList.add('hidden');
+    }
+
+    // Sync low data mode status
+    sidebarLowDataStatus.textContent = lowDataMode ? 'ON' : 'OFF';
+}
+
+function closeSidebar() {
+    sidebarMenu.classList.remove('open');
+    sidebarOverlay.classList.remove('active');
+}
+
 // Toggle between dark and light mode
 function toggleTheme() {
     const body = document.body;
@@ -1644,6 +1757,172 @@ window.addEventListener('load', () => {
     }
 });
 
-console.log('Online Church Meeting Platform loaded - v3.1 with mute indicators, shareable links, and theme toggle');
-console.log('Features: Host controls, Notifications, Mobile optimization, Low data mode, MP3 recording');
+// ===== FULL-SCREEN SCREEN SHARING FUNCTIONS =====
+function enableScreenShareFullscreen(participantId) {
+    screenShareFullscreenActive = true;
+    screenShareParticipantId = participantId;
+
+    const videoContainer = document.getElementById(`video-${participantId}`);
+    if (!videoContainer) {
+        console.error('Video container not found for participant:', participantId);
+        return;
+    }
+
+    // Add full-screen class to the video container
+    videoContainer.classList.add('screen-share-fullscreen');
+
+    // Add class to meeting section to hide grid
+    meetingSection.classList.add('screen-share-active');
+
+    // Create thumbnails container for other participants
+    const thumbnailsContainer = document.createElement('div');
+    thumbnailsContainer.id = 'screenShareThumbnails';
+    thumbnailsContainer.className = 'screen-share-thumbnails';
+
+    // Add all other video streams as thumbnails
+    const allVideos = document.querySelectorAll('.video-container');
+    allVideos.forEach(container => {
+        if (container.id !== `video-${participantId}`) {
+            const thumbnail = container.cloneNode(true);
+            thumbnail.className = 'screen-share-thumbnail';
+            thumbnail.id = `thumbnail-${container.id}`;
+
+            // Make thumbnail clickable to switch to that participant
+            thumbnail.addEventListener('click', () => {
+                const originalId = container.id.replace('video-', '');
+                switchScreenShareView(originalId);
+            });
+
+            thumbnailsContainer.appendChild(thumbnail);
+        }
+    });
+
+    meetingSection.appendChild(thumbnailsContainer);
+
+    // Add exit button
+    const exitBtn = document.createElement('button');
+    exitBtn.id = 'screenShareExitBtn';
+    exitBtn.className = 'screen-share-exit-btn';
+    exitBtn.innerHTML = '<i class="fas fa-times"></i> Exit Full Screen';
+    exitBtn.addEventListener('click', () => {
+        if (participantId === 'local') {
+            stopScreenShare();
+        } else {
+            disableScreenShareFullscreen();
+        }
+    });
+    meetingSection.appendChild(exitBtn);
+
+    // Add label showing who is sharing
+    const label = document.createElement('div');
+    label.id = 'screenShareLabel';
+    label.className = 'screen-share-label';
+    const participantName = participantId === 'local' ?
+        'You are sharing your screen' :
+        `${participants[participantId]?.username || 'Participant'} is sharing their screen`;
+    label.innerHTML = `<i class="fas fa-desktop"></i> ${participantName}`;
+    meetingSection.appendChild(label);
+
+    // Handle ESC key to exit full-screen
+    const escHandler = (e) => {
+        if (e.key === 'Escape' && screenShareFullscreenActive) {
+            if (participantId === 'local') {
+                stopScreenShare();
+            } else {
+                disableScreenShareFullscreen();
+            }
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    console.log('✅ Full-screen screen sharing enabled for:', participantId);
+}
+
+function disableScreenShareFullscreen() {
+    screenShareFullscreenActive = false;
+
+    if (!screenShareParticipantId) return;
+
+    const videoContainer = document.getElementById(`video-${screenShareParticipantId}`);
+    if (videoContainer) {
+        videoContainer.classList.remove('screen-share-fullscreen');
+    }
+
+    // Remove class from meeting section
+    meetingSection.classList.remove('screen-share-active');
+
+    // Remove thumbnails container
+    const thumbnailsContainer = document.getElementById('screenShareThumbnails');
+    if (thumbnailsContainer) {
+        thumbnailsContainer.remove();
+    }
+
+    // Remove exit button
+    const exitBtn = document.getElementById('screenShareExitBtn');
+    if (exitBtn) {
+        exitBtn.remove();
+    }
+
+    // Remove label
+    const label = document.getElementById('screenShareLabel');
+    if (label) {
+        label.remove();
+    }
+
+    screenShareParticipantId = null;
+
+    console.log('✅ Full-screen screen sharing disabled');
+}
+
+function switchScreenShareView(newParticipantId) {
+    if (!screenShareFullscreenActive) return;
+
+    // Disable current full-screen
+    const currentContainer = document.getElementById(`video-${screenShareParticipantId}`);
+    if (currentContainer) {
+        currentContainer.classList.remove('screen-share-fullscreen');
+    }
+
+    // Enable full-screen for new participant
+    const newContainer = document.getElementById(`video-${newParticipantId}`);
+    if (newContainer) {
+        newContainer.classList.add('screen-share-fullscreen');
+        screenShareParticipantId = newParticipantId;
+
+        // Update label
+        const label = document.getElementById('screenShareLabel');
+        if (label) {
+            const participantName = newParticipantId === 'local' ?
+                'You' :
+                participants[newParticipantId]?.username || 'Participant';
+            label.innerHTML = `<i class="fas fa-desktop"></i> ${participantName}'s screen`;
+        }
+
+        // Rebuild thumbnails
+        const thumbnailsContainer = document.getElementById('screenShareThumbnails');
+        if (thumbnailsContainer) {
+            thumbnailsContainer.innerHTML = '';
+
+            const allVideos = document.querySelectorAll('.video-container');
+            allVideos.forEach(container => {
+                if (container.id !== `video-${newParticipantId}`) {
+                    const thumbnail = container.cloneNode(true);
+                    thumbnail.className = 'screen-share-thumbnail';
+                    thumbnail.id = `thumbnail-${container.id}`;
+
+                    thumbnail.addEventListener('click', () => {
+                        const originalId = container.id.replace('video-', '');
+                        switchScreenShareView(originalId);
+                    });
+
+                    thumbnailsContainer.appendChild(thumbnail);
+                }
+            });
+        }
+    }
+}
+
+console.log('Online Church Meeting Platform loaded - v3.1.1 Patch 3');
+console.log('Features: Video fix, Sidebar menu, Full-screen screen sharing, Host controls, Mobile optimization');
 
