@@ -148,7 +148,8 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str, participant_
                         "username": participant_usernames[meeting_id].get(participant_id, "Anonymous"),
                         "message": message.get("message", ""),
                         "timestamp": message.get("timestamp")
-                    }
+                    },
+                    exclude_participant=participant_id
                 )
                 logger.info(f"Chat message from {participant_id} in meeting {meeting_id}")
 

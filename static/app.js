@@ -342,7 +342,14 @@ function connectWebSocket() {
             case 'offer':
             case 'answer':
             case 'ice-candidate':
+            case 'candidate':
                 await handleSignaling(message);
+                break;
+            default:
+                // Fallback for SimplePeer 'signal' messages that may lack type for ICE
+                if (message.sdp || message.candidate) {
+                    await handleSignaling(message);
+                }
                 break;
         }
     };
@@ -382,12 +389,16 @@ function createPeerConnection(peerId, initiator) {
     });
     
     peer.on('signal', (data) => {
-        console.log('Sending signal to', peerId, 'type:', data.type);
-        ws.send(JSON.stringify({
-            type: data.type,
-            target: peerId,
-            ...data
-        }));
+        // Normalize signal message types so receiver can route correctly
+        let out = { target: peerId, ...data };
+        if (data && (data.type === 'offer' || data.type === 'answer')) {
+            out.type = data.type;
+        } else if (data && data.candidate) {
+            // SimplePeer emits ICE candidates without a type; standardize it
+            out.type = 'ice-candidate';
+        }
+        console.log('Sending signal to', peerId, 'type:', out.type || '(candidate)');
+        ws.send(JSON.stringify(out));
     });
     
     peer.on('stream', (remoteStream) => {
