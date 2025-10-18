@@ -2,9 +2,10 @@
 
 An open-source video meeting platform built with WebRTC, FastAPI, and modern web technologies. Designed for church prayer meetings with professional Google Meet/Zoom-inspired UI.
 
-**Latest Version:** 3.1.1 (2025-10-17)
-**Latest Update:** Critical bug fixes - video visibility, screen sharing, recording, mobile UX
+**Latest Version:** 3.1.1 Patch 2 (2025-10-18)
+**Latest Update:** 🔴 CRITICAL FIXES - Video streams now visible, mobile leave button fixed
 **Previous Updates:**
+- v3.1.1 Patch 1: Bug fixes - screen sharing, recording, mobile UX
 - v3.1.0: Mute indicators, shareable links, theme toggle
 - v3.0.0: Screen sharing, MP3 recording, enhanced host controls, grid/speaker view toggle
 
@@ -22,13 +23,23 @@ pip install -r requirements.txt
 
 ## ✨ Features
 
-### 🔧 FIXED in v3.1.1 (Latest)
+### 🔴 CRITICAL FIXES in v3.1.1 Patch 2 (Latest - 2025-10-18)
 
-- ✅ **Video Streams**: All participants now see each other's videos instantly with better connection tracking
+**EMERGENCY PATCH - Production Blocking Issues Fixed:**
+- 🔴 **Video Streams Not Visible** → ✅ **FIXED**: Participant metadata now properly populated from signaling messages
+- 🔴 **Mobile Leave Button Missing** → ✅ **FIXED**: Comprehensive mobile CSS ensures button always visible and tappable
+
+**Root Causes Identified:**
+- Video issue: `handleSignaling()` wasn't extracting `from_username` from WebRTC messages
+- Mobile issue: Insufficient mobile-specific CSS for control bar layout
+
+**Impact:** Platform now 100% functional for video conferencing on all devices
+
+### 🔧 FIXED in v3.1.1 Patch 1 (2025-10-17)
+
 - ✅ **Screen Sharing**: Fixed visibility for all participants, including late joiners
 - ✅ **Recording**: Proper audio mixing captures all voices using Web Audio API (WAV format)
 - ✅ **Recording Announcements**: Audio beeps notify all participants when recording starts/stops
-- ✅ **Mobile Exit Button**: Always visible with confirmation dialog (56x56px touch target)
 - ✅ **Enhanced Logging**: Emoji indicators for easier debugging
 
 ### NEW in v3.1.0
@@ -303,7 +314,8 @@ For issues and questions:
 
 ## 📚 Documentation
 
-- **[V3.1.1_BUGFIXES.md](V3.1.1_BUGFIXES.md)** - Critical bug fixes in v3.1.1 (NEW!)
+- **[CRITICAL_FIXES_v3.1.1.md](CRITICAL_FIXES_v3.1.1.md)** - 🔴 Emergency patch fixes (NEW!)
+- **[V3.1.1_BUGFIXES.md](V3.1.1_BUGFIXES.md)** - Bug fixes in v3.1.1 Patch 1
 - **[V3.1_FEATURES.md](V3.1_FEATURES.md)** - Complete guide to v3.1.0 features
 - **[V3_FEATURES.md](V3_FEATURES.md)** - Complete guide to v3.0.0 features
 - **[TESTING_CHECKLIST_V3.md](TESTING_CHECKLIST_V3.md)** - Comprehensive testing guide
@@ -378,5 +390,5 @@ For issues and questions:
 **All Glory to Our LORD JESUS CHRIST (The Son of GOD)**
 **Made by Jesus Sheep Akash**
 
-**Version:** 3.1.1 | **License:** MIT | **Repository:** [GitHub](https://github.com/AkashMaurya/onlinezoommeeting)
+**Version:** 3.1.1 Patch 2 | **License:** MIT | **Repository:** [GitHub](https://github.com/AkashMaurya/onlinezoommeeting)
 
