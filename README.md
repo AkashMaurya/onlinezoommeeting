@@ -109,8 +109,15 @@ pip install -r requirements.txt
    ```
 
 4. **Run the application**
+
+   **Development Mode:**
    ```bash
    uvicorn main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+   **Production Mode (Recommended for testing with multiple users):**
+   ```bash
+   gunicorn -c gunicorn.conf.py main:app
    ```
 
 5. **Open your browser**
@@ -134,6 +141,38 @@ pip install -r requirements.txt
 
 **See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing instructions.**
 
+## 🚀 Production Deployment
+
+### Why Production Configuration Matters
+
+⚠️ **IMPORTANT:** The development server (`uvicorn main:app --reload`) is **NOT suitable for production** because:
+- ❌ Single process - cannot handle concurrent users
+- ❌ No worker management - crashes affect all users
+- ❌ Limited to ~10 concurrent WebSocket connections
+- ❌ No automatic restarts or load balancing
+
+✅ **Production Setup (Gunicorn + Uvicorn Workers):**
+- ✅ Multiple worker processes - handles 100+ concurrent users
+- ✅ Automatic worker management and restarts
+- ✅ Graceful WebSocket connection handling
+- ✅ Worker recycling prevents memory leaks
+- ✅ Production-grade reliability
+
+### Quick Production Start
+
+```bash
+# Install dependencies (includes Gunicorn)
+pip install -r requirements.txt
+
+# Run with Gunicorn (production-ready)
+gunicorn -c gunicorn.conf.py main:app
+
+# Custom configuration
+PORT=8080 WEB_CONCURRENCY=4 gunicorn -c gunicorn.conf.py main:app
+```
+
+**📖 See [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) for complete production deployment guide.**
+
 ## Deployment on Render
 
 ### Prerequisites
@@ -156,11 +195,11 @@ pip install -r requirements.txt
    - Click "New +" → "Web Service"
    - Connect your GitHub repository
    - Configure the service:
-     - **Name**: video-meeting-platform (or your choice)
+     - **Name**: church-meeting-platform (or your choice)
      - **Environment**: Python 3
      - **Build Command**: `pip install -r requirements.txt`
-     - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-     - **Plan**: Free
+     - **Start Command**: `gunicorn -c gunicorn.conf.py main:app` ✅ **Production-ready!**
+     - **Plan**: Free (or paid for better performance)
 
 3. **Deploy**
    - Click "Create Web Service"
@@ -171,7 +210,11 @@ pip install -r requirements.txt
 
 You can add these in Render's dashboard:
 - `PORT`: Automatically set by Render
+- `WEB_CONCURRENCY`: Number of workers (default: auto-calculated)
+- `LOG_LEVEL`: Logging level (default: info)
 - `DATABASE_URL`: For external database (if needed)
+
+**Note:** Render automatically uses the `Procfile` which is configured for production with Gunicorn.
 
 ## Project Structure
 
@@ -314,7 +357,8 @@ For issues and questions:
 
 ## 📚 Documentation
 
-- **[CRITICAL_FIXES_v3.1.1.md](CRITICAL_FIXES_v3.1.1.md)** - 🔴 Emergency patch fixes (NEW!)
+- **[PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md)** - 🚀 Production deployment with Gunicorn (NEW!)
+- **[CRITICAL_FIXES_v3.1.1.md](CRITICAL_FIXES_v3.1.1.md)** - 🔴 Emergency patch fixes
 - **[V3.1.1_BUGFIXES.md](V3.1.1_BUGFIXES.md)** - Bug fixes in v3.1.1 Patch 1
 - **[V3.1_FEATURES.md](V3.1_FEATURES.md)** - Complete guide to v3.1.0 features
 - **[V3_FEATURES.md](V3_FEATURES.md)** - Complete guide to v3.0.0 features
