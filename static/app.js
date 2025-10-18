@@ -374,6 +374,16 @@ function createPeerConnection(peerId, initiator) {
 async function handleSignaling(message) {
     const peerId = message.from;
 
+    // FIX: Ensure participant info is available before creating peer
+    if (!participants[peerId] && message.from_username) {
+        console.log('Adding participant info for', peerId, ':', message.from_username);
+        participants[peerId] = {
+            username: message.from_username,
+            isHost: peerId === hostId
+        };
+        updateParticipantList();
+    }
+
     // FIX: Create peer if it doesn't exist
     if (!peers[peerId]) {
         console.log('Creating peer for incoming signal from', peerId);
