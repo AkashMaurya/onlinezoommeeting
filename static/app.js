@@ -295,10 +295,10 @@ function connectWebSocket() {
                 updateParticipantList();
                 showToast(`${message.username} joined the meeting`, 'info');
 
-                // FIX: Create peer connection to new participant
-                // Existing participants must initiate connection to new participant
-                console.log('🔗 Creating peer connection to new participant:', message.participant_id);
-                createPeerConnection(message.participant_id, true);
+                // NOTE: Do NOT create peer connection here!
+                // The new participant will initiate connections to all existing participants
+                // Existing participants will receive offers via handleSignaling() and create peers there
+                console.log('📢 New participant joined:', message.participant_id, '- waiting for their offer');
                 break;
             
             case 'participant_left':
